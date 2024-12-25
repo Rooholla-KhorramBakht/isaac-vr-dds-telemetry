@@ -38,7 +38,7 @@ class UIBuilder:
 
         # Get access to the timeline to control stop/pause/play programmatically
         self._timeline = omni.timeline.get_timeline_interface()
-        self.dds_pose_publihser = VRPosePublihser('quest_topic_name')
+        self.dds_pose_publihser = VRPosePublihser('vr_poses')
         # Run initialization for the provided example
         self._on_init()
 
@@ -86,7 +86,7 @@ class UIBuilder:
         """
         hmd_prim_path = '/_xr_gui/vr/_coord/xrdevice/xrdisplaydevice0'
         right_controller_prim_path = '/_xr_gui/vr/_coord/xrdevice/xrcontroller1'
-        left_controller_prim_path = '/_xr_gui/vr/_coord/xrdevice/xrcontroller1'
+        left_controller_prim_path = '/_xr_gui/vr/_coord/xrdevice/xrcontroller0'
         world_pose_hmd = self.extractPrimPose(hmd_prim_path)
         world_pose_left = self.extractPrimPose(left_controller_prim_path)
         world_pose_right = self.extractPrimPose(right_controller_prim_path)
@@ -95,7 +95,7 @@ class UIBuilder:
             hmd_q = world_pose_hmd[1].tolist()
         if world_pose_left is not None:
             left_t = world_pose_left[0].tolist()
-            left_q = world_pose_right[1].tolist()
+            left_q = world_pose_left[1].tolist()
         if world_pose_right is not None:
             right_t = world_pose_right[0].tolist()
             right_q = world_pose_right[1].tolist()
@@ -197,17 +197,17 @@ class UIBuilder:
         their assets to the World (which has low overhead).  See commented code section in this function.
         """
         pass
-        # Load the UR10e
-        robot_prim_path = "/"
-        # path_to_robot_usd = get_assets_root_path() + "/Isaac/Robots/UniversalRobots/ur10e/ur10e.usd"
-        path_to_robot_usd = "C:/users/r.khorrrambakht/downloads/vr-logger/VR_DDS_Logger_python/assets/flexiv.usd"
+        # # Load the UR10e
+        # robot_prim_path = "/"
+        # # path_to_robot_usd = get_assets_root_path() + "/Isaac/Robots/UniversalRobots/ur10e/ur10e.usd"
+        # path_to_robot_usd = "C:/users/r.khorrrambakht/downloads/vr-logger/VR_DDS_Logger_python/assets/flexiv.usd"
 
-        # Do not reload assets when hot reloading.  This should only be done while extension is under development.
-        if not is_prim_path_valid(robot_prim_path):
-            create_new_stage()
-            add_reference_to_stage(path_to_robot_usd, robot_prim_path)
-        else:
-            print("Robot already on Stage")
+        # # Do not reload assets when hot reloading.  This should only be done while extension is under development.
+        # if not is_prim_path_valid(robot_prim_path):
+        #     create_new_stage()
+        #     add_reference_to_stage(path_to_robot_usd, robot_prim_path)
+        # else:
+        #     print("Robot already on Stage")
 
         # create_new_stage()
         # self._add_light_to_stage()

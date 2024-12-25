@@ -6,6 +6,9 @@
 # distribution of this software and related documentation without an express
 # license agreement from NVIDIA CORPORATION is strictly prohibited.
 #
-from .extension import *
+try:
+    from .extension import *
+except:
+    pass # This is a workaround to avoid import error when telemetry module is outside isaac echosystem
 import os
 ASSETS_PATH = os.path.join(os.path.dirname(__file__), 'assets/')
