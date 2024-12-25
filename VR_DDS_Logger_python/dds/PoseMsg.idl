@@ -1,0 +1,8 @@
+struct VRPose {
+    float hmd_q[4];
+    float hmd_t[3];
+    float left_q[4];
+    float left_t[3];
+    float right_q[4];
+    float right_t[3];
+};
