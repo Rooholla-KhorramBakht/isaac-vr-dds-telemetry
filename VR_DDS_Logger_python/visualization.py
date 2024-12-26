@@ -1,4 +1,5 @@
 import rerun as rr
+from scipy.spatial.transform import Rotation as R
 
 class RerunVisualizer:
     def __init__(self, app_name="RerunVisualizer", log_time_label='logtime', spawn=True, port=9876):

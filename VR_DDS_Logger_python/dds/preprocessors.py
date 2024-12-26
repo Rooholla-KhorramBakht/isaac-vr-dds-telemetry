@@ -1,7 +1,7 @@
 
 import numpy as np
 import time 
-
+from scipy.spatial.transform import Rotation as R
 class PoseBasedPreprocessor:
     def __init__(self, subscriber, world_T_vrworld  = np.eye(4)):
         self.subscriber = subscriber    
@@ -33,8 +33,8 @@ class PoseBasedPreprocessor:
         state = self.subscriber.getState()
         if state is not None:
             world_T_head = self.world0_T_world@state['world_T_head']
-            world_T_left = self.left_offset@world0_T_world@state['world_T_left']
-            world_T_right = self.right_offset@world0_T_world@state['world_T_right']
+            world_T_left = self.left_offset@self.world0_T_world@state['world_T_left']
+            world_T_right = self.right_offset@self.world0_T_world@state['world_T_right']
 
             global_y = np.array([0,1,0])
             left_y = world_T_left[:3,1]
@@ -59,8 +59,8 @@ class PoseBasedPreprocessor:
                         world_T_head=self.world_T_vrworld@world_T_head, 
                         world_T_left=self.world_T_vrworld@world_T_left, 
                         world_T_right=self.world_T_vrworld@world_T_right,
-                        left_switch=self.world_T_vrworld@self.left_switch, 
-                        right_switch=self.world_T_vrworld@self.right_switch
+                        left_switch=self.left_switch, 
+                        right_switch=self.right_switch
                         )
         else: 
             return None
