@@ -15,15 +15,21 @@ from .FlexivState import FlexivStateMsg
 
 def set_cyclonedds_config(interface_name):
     # Generate the XML configuration
-    xml_content = f"""<CycloneDDS>
-  <Domain>
-    <General>
-      <Interfaces>
-        <NetworkInterface name="{interface_name}" priority="default" multicast="default" />
-      </Interfaces>
-    </General>
-  </Domain>
-</CycloneDDS>"""
+    xml_content = f"""
+      <CycloneDDS>
+      <Domain id="any">
+              <General>
+                  <NetworkInterfaceAddress>192.168.2.124</NetworkInterfaceAddress>
+              </General>
+          <Discovery>
+              <Peers>
+                  <Peer address="192.168.2.123"/>
+              </Peers>
+              <ParticipantIndex>auto</ParticipantIndex>
+          </Discovery>
+          </Domain>
+      </CycloneDDS>
+    """
 
     # Create a temporary XML file
     cfg_file_path = os.path.join(os.path.dirname(__file__), 'cyclonedds.xml')
@@ -35,7 +41,8 @@ def set_cyclonedds_config(interface_name):
 
 class VRPosePublihser:
     def __init__(self, topic_name, interface_name = None):
-        if interface_name is not None:
+        # if interface_name is not None:
+        if True:
             set_cyclonedds_config(interface_name)
         self.topic_name = topic_name
         self.participant = DomainParticipant()

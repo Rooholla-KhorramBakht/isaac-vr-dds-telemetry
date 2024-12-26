@@ -47,12 +47,13 @@ class UIBuilder:
         # Get access to the timeline to control stop/pause/play programmatically
         self._timeline = omni.timeline.get_timeline_interface()
         self.dds_pose_publihser = VRPosePublihser('vr_poses')
-        world_settings = {"physics_dt": 1.0 / 60.0, "stage_units_in_meters": 1.0, "rendering_dt": 1.0 / 60.0}
-        self.world = World(**world_settings)
         # Run initialization for the provided example
         self.flexiv_state_subscriber = FlexivStateSubscriber()
         self._on_init()
-
+    
+    def telemetry_read_func(self):
+        state = self.flexiv_state_subscriber.getState()
+        return state
     ###################################################################################
     #           The Functions Below Are Called Automatically By extension.py
     ###################################################################################
@@ -269,7 +270,7 @@ class UIBuilder:
 
     def _reset_scenario(self):
         self._scenario.teardown_scenario()
-        self._scenario.setup_scenario(self._articulation, self._cuboid)
+        self._scenario.setup_scenario(self._articulation, self._cuboid, self.telemetry_read_func)
         pass
 
     def _on_post_reset_btn(self):

@@ -44,10 +44,10 @@ class FlexivJointMimicScenario(ScenarioTemplate):
         self._running_scenario = False
         self.flexiv_q0 = np.array([0.0, -0.698, 0.000, 1.571, -0.000, 0.698, -0.000])
 
-    def setup_scenario(self, articulation, object_prim):
+    def setup_scenario(self, articulation, object_prim, telemetry_read_func):
         self._articulation = articulation
         self._object = object_prim
-
+        self.telemetry_read_func = telemetry_read_func
         self._initial_object_position = self._object.get_world_pose()[0]
         self._running_scenario = True
         self._lower_joint_limits = articulation.dof_properties["lower"]
@@ -65,13 +65,10 @@ class FlexivJointMimicScenario(ScenarioTemplate):
     def update_scenario(self, step: float):
         if not self._running_scenario:
             return
-        # self._object.set_world_pose(np.array([x, y, z]))
-        # joint_position_target = self._calculate_position(self._joint_time, self._path_duration)
-        # joint_velocity_target = self._calculate_velocity(self._joint_time, self._path_duration)
-
-        # action = ArticulationAction(
-        #     np.array([joint_position_target]),
-        #     np.array([joint_velocity_target]),
-        #     joint_indices=np.array([self._joint_index]),
-        # )
-        # self._articulation.apply_action(action)
+        state = self.telemetry_read_func()
+        if state is not None:
+            action = ArticulationAction(
+                joint_positions =np.array(state['q']),
+                joint_velocities  = np.array(state['dq']),
+            )
+            self._articulation.apply_action(action)
