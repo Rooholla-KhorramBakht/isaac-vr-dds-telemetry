@@ -34,7 +34,7 @@ from omni.isaac.core.robots import Robot
 from omni.isaac.core import World
 import carb
 import omni.isaac.core.utils.carb as carb_utils
-
+from .scene import PCDManager
 import os
 
 class UIBuilder:
@@ -247,8 +247,14 @@ class UIBuilder:
             "/Scenario/cuboid", position=np.array([0.3, 0.3, 0.5]), size=0.05, color=np.array([255, 0, 0])
         )
 
-        # self._articulation = Articulation(robot_prim_path)
-
+        # ToDo: Make this process GUI controllable
+        assets_path = os.path.join(os.path.join(os.path.dirname(os.path.abspath(__file__))), 'assets')
+        pcd_path = os.path.join(assets_path, 'aluminum-gate.pkl')
+        import pickle
+        with open(pcd_path, 'rb') as f:
+            pcd = pickle.load(f)
+        self.pcd_manager = PCDManager(pcd.shape[0], 0.005)
+        self.pcd_manager.update_points(pcd)
         # Add user-loaded objects to the World
         world.scene.add(self._cuboid)
 
