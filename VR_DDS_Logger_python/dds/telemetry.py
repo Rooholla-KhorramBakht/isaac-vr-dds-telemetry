@@ -9,6 +9,8 @@ from cyclonedds.pub import DataWriter
 from cyclonedds.util import duration
 from threading import Thread
 from .PoseMsg import VRPose
+from .FlexivState import FlexivStateMsg
+# from .flexiv_messages import FlexivState
 # from VR_DDS_Logger_python import ASSETS_PATH
 
 def set_cyclonedds_config(interface_name):
@@ -89,3 +91,37 @@ class VRPoseSubscriber:
   def close(self):
     self.running = False
     self.receive_thread.join()   
+
+
+class FlexivStateSubscriber:
+  def __init__(self, topic_name='flexiv_state', interface_name = None):
+    self.topic_name = topic_name
+    if interface_name is not None:
+        set_cyclonedds_config(interface_name)
+    self.participant = DomainParticipant()
+    self.topic = Topic(self.participant, self.topic_name, FlexivStateMsg)
+    self.reader = DataReader(self.participant, self.topic)
+
+  def getState(self):
+    state = None
+    for msg in self.reader.take_iter(timeout=duration(milliseconds=1.)):
+      state = msg
+    if state is not None:
+      return dict(q=msg.q, 
+                  dq = msg.dq, 
+                  tau = msg.tau
+                  )
+    else:
+      return None
+
+class FlexivStatePublisher:
+    def __init__(self, topic_name, interface_name = None):
+        if interface_name is not None:
+            set_cyclonedds_config(interface_name)
+        self.topic_name = topic_name
+        self.participant = DomainParticipant()
+        self.topic = Topic(self.participant, self.topic_name, FlexivStateMsg)
+        self.writer = DataWriter(self.participant, self.topic)
+
+    def send(self, state):
+        self.writer.write(state)

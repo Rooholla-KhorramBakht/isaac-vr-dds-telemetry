@@ -24,10 +24,18 @@ from omni.usd import StageEventType
 from pxr import Sdf, UsdLux
 from omni.usd import get_prim_at_path
 from .dds.PoseMsg import VRPose
-from .dds.telemetry import VRPosePublihser
+from .dds.telemetry import VRPosePublihser, FlexivStateSubscriber
 
-from .scenario import ExampleScenario
+from .scenario import FlexivJointMimicScenario
 
+from omni.isaac.core.utils.nucleus import get_assets_root_path
+from omni.isaac.core.utils.stage import add_reference_to_stage
+from omni.isaac.core.robots import Robot
+from omni.isaac.core import World
+import carb
+import omni.isaac.core.utils.carb as carb_utils
+
+import os
 
 class UIBuilder:
     def __init__(self):
@@ -39,7 +47,10 @@ class UIBuilder:
         # Get access to the timeline to control stop/pause/play programmatically
         self._timeline = omni.timeline.get_timeline_interface()
         self.dds_pose_publihser = VRPosePublihser('vr_poses')
+        world_settings = {"physics_dt": 1.0 / 60.0, "stage_units_in_meters": 1.0, "rendering_dt": 1.0 / 60.0}
+        self.world = World(**world_settings)
         # Run initialization for the provided example
+        self.flexiv_state_subscriber = FlexivStateSubscriber()
         self._on_init()
 
     ###################################################################################
@@ -99,16 +110,16 @@ class UIBuilder:
         if world_pose_right is not None:
             right_t = world_pose_right[0].tolist()
             right_q = world_pose_right[1].tolist()
-        
-        vr_msg = VRPose(
-            hmd_q = hmd_q, 
-            hmd_t = hmd_t, 
-            left_q = left_q, 
-            left_t = left_t, 
-            right_q = right_q, 
-            right_t = right_t
-        )
-        self.dds_pose_publihser.send(vr_msg)
+        if world_pose_hmd is not None:
+            vr_msg = VRPose(
+                hmd_q = hmd_q, 
+                hmd_t = hmd_t, 
+                left_q = left_q, 
+                left_t = left_t, 
+                right_q = right_q, 
+                right_t = right_t
+            )
+            self.dds_pose_publihser.send(vr_msg)
 
     def on_stage_event(self, event):
         """Callback for Stage Events
@@ -172,7 +183,7 @@ class UIBuilder:
     def _on_init(self):
         self._articulation = None
         self._cuboid = None
-        self._scenario = ExampleScenario()
+        self._scenario = FlexivJointMimicScenario()
 
     def _add_light_to_stage(self):
         """
@@ -196,6 +207,23 @@ class UIBuilder:
         and avoid loading anything if they are.  In this case, the user would still need to add
         their assets to the World (which has low overhead).  See commented code section in this function.
         """
+        asset_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'assets/table-scene.usd') 
+        add_reference_to_stage(usd_path=asset_path, prim_path="/World")
+        settings = carb.settings.get_settings()
+        # Set the VR anchor to our custom anchor
+        try:
+            carb_utils.set_carb_setting(settings, "/xrstage/profile/vr/anchorMode", "custom anchor")
+            carb_utils.set_carb_setting(settings, 'xrstage/profile/vr/customAnchor', '/World/vr_anchor')
+        except:
+            raise Exception('VR profile settings not active. Make sure VR experience extension is active')
+        # create a robot class to interact with the robot
+        try:
+           self._articulation = Articulation("/World/flexiv_rizon10s_kinematics")
+        except:
+            raise Exception('Could not instantiate the interface to the flexiv robot. Make sure the selected \
+                            file contains a robot at /World/flexiv_rizon10s_kinematics prim path')
+        world = World.instance()
+        world.scene.add(self._articulation)
         pass
         # # Load the UR10e
         # robot_prim_path = "/"
@@ -214,16 +242,14 @@ class UIBuilder:
         # add_reference_to_stage(path_to_robot_usd, robot_prim_path)
 
         # Create a cuboid
-        # self._cuboid = FixedCuboid(
-        #     "/Scenario/cuboid", position=np.array([0.3, 0.3, 0.5]), size=0.05, color=np.array([255, 0, 0])
-        # )
+        self._cuboid = FixedCuboid(
+            "/Scenario/cuboid", position=np.array([0.3, 0.3, 0.5]), size=0.05, color=np.array([255, 0, 0])
+        )
 
         # self._articulation = Articulation(robot_prim_path)
 
         # Add user-loaded objects to the World
-        # world = World.instance()
-        # world.scene.add(self._articulation)
-        # world.scene.add(self._cuboid)
+        world.scene.add(self._cuboid)
 
     def _setup_scenario(self):
         """
@@ -242,8 +268,8 @@ class UIBuilder:
         self._reset_btn.enabled = True
 
     def _reset_scenario(self):
-        # self._scenario.teardown_scenario()
-        # self._scenario.setup_scenario(self._articulation, self._cuboid)
+        self._scenario.teardown_scenario()
+        self._scenario.setup_scenario(self._articulation, self._cuboid)
         pass
 
     def _on_post_reset_btn(self):
@@ -269,8 +295,7 @@ class UIBuilder:
         Args:
             step (float): The dt of the current physics step
         """
-        # self._scenario.update_scenario(step)
-        pass
+        self._scenario.update_scenario(step)
 
     def _on_run_scenario_a_text(self):
         """
