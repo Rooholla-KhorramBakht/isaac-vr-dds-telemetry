@@ -115,7 +115,7 @@ class FlexivStateSubscriber:
       return None
 
 class FlexivStatePublisher:
-    def __init__(self, topic_name, interface_name = None):
+    def __init__(self, topic_name='flexiv_state', interface_name = None):
         if interface_name is not None:
             set_cyclonedds_config(interface_name)
         self.topic_name = topic_name
