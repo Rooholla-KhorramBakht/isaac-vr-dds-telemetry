@@ -24,7 +24,6 @@ from omni.usd import StageEventType
 from pxr import Sdf, UsdLux
 from omni.usd import get_prim_at_path
 from .dds.PoseMsg import VRPose
-from .dds.telemetry import VRPosePublihser, FlexivStateSubscriber
 
 from .scenario import FlexivJointMimicScenario
 
@@ -35,7 +34,11 @@ from omni.isaac.core import World
 import carb
 import omni.isaac.core.utils.carb as carb_utils
 from .scene import PCDManager
+from .annotator import AnnotatorManager
 import os
+from omni.isaac.core.utils.numpy.rotations import euler_angles_to_quats, quats_to_rot_matrices, rot_matrices_to_quats
+from .dds.telemetry import Publisher
+from .dds.PoseMsg import VRPose
 
 class UIBuilder:
     def __init__(self):
@@ -45,15 +48,28 @@ class UIBuilder:
         self.wrapped_ui_elements = []
 
         # Get access to the timeline to control stop/pause/play programmatically
+        self.dds_enable = True
         self._timeline = omni.timeline.get_timeline_interface()
-        self.dds_pose_publihser = VRPosePublihser('vr_poses')
-        # Run initialization for the provided example
-        self.flexiv_state_subscriber = FlexivStateSubscriber()
+        try:
+            self.vr_pose_publihser = Publisher(VRPose, 'vr_poses')
+        except:
+            print('Could not initialize the DDS. Make sure the network settings is right.')
+            self.dds_enable = False
+
         self._on_init()
     
-    def telemetry_read_func(self):
-        state = self.flexiv_state_subscriber.getState()
-        return state
+    def get_vr_state(self):
+        try:
+            return dict(
+            hmd_q = self.hmd_q, 
+            left_q = self.left_q,
+            right_q = self.right_q,
+            hmd_t = self.hmd_t,
+            left_t = self.left_t,
+            right_t = self.right_t,
+            )
+        except:
+            return None
     ###################################################################################
     #           The Functions Below Are Called Automatically By extension.py
     ###################################################################################
@@ -85,9 +101,9 @@ class UIBuilder:
             q = T.ExtractRotationQuat()
             q = np.hstack([np.array(q.GetImaginary()), q.GetReal()])
             t = np.array(T.ExtractTranslation())
-            return t, q
+            return np.array(T).T, t, q
         else:
-            return None
+            return None, None, None
  
     def on_physics_step(self, step: float):
         """Callback for Physics Step.
@@ -99,28 +115,42 @@ class UIBuilder:
         hmd_prim_path = '/_xr_gui/vr/_coord/xrdevice/xrdisplaydevice0'
         right_controller_prim_path = '/_xr_gui/vr/_coord/xrdevice/xrcontroller1'
         left_controller_prim_path = '/_xr_gui/vr/_coord/xrdevice/xrcontroller0'
-        world_pose_hmd = self.extractPrimPose(hmd_prim_path)
-        world_pose_left = self.extractPrimPose(left_controller_prim_path)
-        world_pose_right = self.extractPrimPose(right_controller_prim_path)
-        if world_pose_hmd is not None:
-            hmd_t = world_pose_hmd[0].tolist()
-            hmd_q = world_pose_hmd[1].tolist()
-        if world_pose_left is not None:
-            left_t = world_pose_left[0].tolist()
-            left_q = world_pose_left[1].tolist()
-        if world_pose_right is not None:
-            right_t = world_pose_right[0].tolist()
-            right_q = world_pose_right[1].tolist()
-        if world_pose_hmd is not None:
-            vr_msg = VRPose(
-                hmd_q = hmd_q, 
-                hmd_t = hmd_t, 
-                left_q = left_q, 
-                left_t = left_t, 
-                right_q = right_q, 
-                right_t = right_t
-            )
-            self.dds_pose_publihser.send(vr_msg)
+        vr_T_hmd, hmd_t, hmd_q = self.extractPrimPose(hmd_prim_path)
+        vr_T_left, left_t, left_q = self.extractPrimPose(left_controller_prim_path)
+        vr_T_right, right_t, right_q = self.extractPrimPose(right_controller_prim_path)
+        world_T_vr = np.eye(4)
+        world_T_vr[:3, :3] = quats_to_rot_matrices(euler_angles_to_quats([np.pi/2,0, 0]))
+        
+        if vr_T_hmd is not None:
+            world_T_right = world_T_vr@vr_T_right
+            world_T_left = world_T_vr@vr_T_left
+            world_T_hmd = world_T_vr@vr_T_hmd
+
+            hmd_q = rot_matrices_to_quats(world_T_hmd[:3,:3])
+            left_q = rot_matrices_to_quats(world_T_left[:3,:3])
+            right_q = rot_matrices_to_quats(world_T_right[:3,:3])
+            hmd_t = world_T_hmd[:3,-1]
+            left_t = world_T_left[:3,-1]
+            right_t = world_T_right[:3,-1]
+            if self.dds_enable:
+                vr_msg = VRPose(
+                    hmd_q = hmd_q.tolist(), 
+                    hmd_t = hmd_t.tolist(), 
+                    left_q = left_q.tolist(), 
+                    left_t = left_t.tolist(), 
+                    right_q = right_q.tolist(), 
+                    right_t = right_t.tolist()
+                )
+                self.vr_pose_publihser.send(vr_msg)
+            self.hmd_q = hmd_q
+            self.left_q = left_q
+            self.right_q = right_q
+            self.hmd_t = hmd_t
+            self.left_t = left_t
+            self.right_t = right_t
+
+
+        # self.front_cam_img = self.annotation_manager.getData('front_cam:rgb')
 
     def on_stage_event(self, event):
         """Callback for Stage Events
@@ -153,7 +183,8 @@ class UIBuilder:
                 self._load_btn = LoadButton(
                     "Load Button", "LOAD", setup_scene_fn=self._setup_scene, setup_post_load_fn=self._setup_scenario
                 )
-                self._load_btn.set_world_settings(physics_dt=1 / 60.0, rendering_dt=1 / 60.0)
+
+                self._load_btn.set_world_settings(physics_dt=1 / 60.0, rendering_dt=1 / 30.0)
                 self.wrapped_ui_elements.append(self._load_btn)
 
                 self._reset_btn = ResetButton(
@@ -208,55 +239,27 @@ class UIBuilder:
         and avoid loading anything if they are.  In this case, the user would still need to add
         their assets to the World (which has low overhead).  See commented code section in this function.
         """
-        asset_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'assets/table-scene.usd') 
-        add_reference_to_stage(usd_path=asset_path, prim_path="/World")
-        settings = carb.settings.get_settings()
-        # Set the VR anchor to our custom anchor
-        try:
+        if not is_prim_path_valid('/World/flexiv_rizon10s_kinematics'):
+            asset_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'assets/table-scene.usd') 
+            add_reference_to_stage(usd_path=asset_path, prim_path="/World")
+            settings = carb.settings.get_settings()
+            # Set the VR anchor to our custom anchor
             carb_utils.set_carb_setting(settings, "/xrstage/profile/vr/anchorMode", "custom anchor")
             carb_utils.set_carb_setting(settings, 'xrstage/profile/vr/customAnchor', '/World/vr_anchor')
-        except:
-            raise Exception('VR profile settings not active. Make sure VR experience extension is active')
-        # create a robot class to interact with the robot
-        try:
-           self._articulation = Articulation("/World/flexiv_rizon10s_kinematics")
-        except:
-            raise Exception('Could not instantiate the interface to the flexiv robot. Make sure the selected \
-                            file contains a robot at /World/flexiv_rizon10s_kinematics prim path')
-        world = World.instance()
-        world.scene.add(self._articulation)
-        pass
-        # # Load the UR10e
-        # robot_prim_path = "/"
-        # # path_to_robot_usd = get_assets_root_path() + "/Isaac/Robots/UniversalRobots/ur10e/ur10e.usd"
-        # path_to_robot_usd = "C:/users/r.khorrrambakht/downloads/vr-logger/VR_DDS_Logger_python/assets/flexiv.usd"
-
-        # # Do not reload assets when hot reloading.  This should only be done while extension is under development.
-        # if not is_prim_path_valid(robot_prim_path):
-        #     create_new_stage()
-        #     add_reference_to_stage(path_to_robot_usd, robot_prim_path)
-        # else:
-        #     print("Robot already on Stage")
-
-        # create_new_stage()
-        # self._add_light_to_stage()
-        # add_reference_to_stage(path_to_robot_usd, robot_prim_path)
-
-        # Create a cuboid
-        self._cuboid = FixedCuboid(
-            "/Scenario/cuboid", position=np.array([0.3, 0.3, 0.5]), size=0.05, color=np.array([255, 0, 0])
-        )
-
-        # ToDo: Make this process GUI controllable
-        assets_path = os.path.join(os.path.join(os.path.dirname(os.path.abspath(__file__))), 'assets')
-        pcd_path = os.path.join(assets_path, 'aluminum-gate.pkl')
-        import pickle
-        with open(pcd_path, 'rb') as f:
-            pcd = pickle.load(f)
-        self.pcd_manager = PCDManager(pcd.shape[0], 0.005)
-        self.pcd_manager.update_points(pcd)
-        # Add user-loaded objects to the World
-        world.scene.add(self._cuboid)
+            # create a robot class to interact with the robot
+            self._articulation = Articulation("/World/flexiv_rizon10s_kinematics")
+            world = World.instance()
+            world.scene.add(self._articulation)
+            # Create a cuboid
+            self._cuboid = FixedCuboid(
+                "/Scenario/cuboid", position=np.array([10.5, 0.0, 0.7]), size=0.05, color=np.array([255, 0, 0])
+            )
+            self.annotation_manager = AnnotatorManager(world)
+            self.annotation_manager.registerCamera('/World/front_cam', 'front_cam', [1.2, 0, 0.7], [-0.66233, -0.66233, 0.24763, 0.24763], (320, 240))
+            self.annotation_manager.setFocalLength('front_cam',24)
+            self.annotation_manager.setClippingRange('front_cam', 0.1, 100)
+            self.annotation_manager.registerAnnotator('front_cam', 'rgb')
+            world.scene.add(self._cuboid)
 
     def _setup_scenario(self):
         """
@@ -276,7 +279,7 @@ class UIBuilder:
 
     def _reset_scenario(self):
         self._scenario.teardown_scenario()
-        self._scenario.setup_scenario(self._articulation, self._cuboid, self.telemetry_read_func)
+        self._scenario.setup_scenario(self._articulation, self._cuboid, self.get_vr_state)
         pass
 
     def _on_post_reset_btn(self):
@@ -287,7 +290,7 @@ class UIBuilder:
         They may also assume that objects that were added to the World.Scene have been moved to their default positions.
         I.e. the cube prim will move back to the position it was in when it was created in self._setup_scene().
         """
-        # self._reset_scenario()
+        self._reset_scenario()
 
         # UI management
         self._scenario_state_btn.reset()

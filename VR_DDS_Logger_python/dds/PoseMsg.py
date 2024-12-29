@@ -25,3 +25,11 @@ class VRPose(idl.IdlStruct, typename="VRPose"):
     left_t: types.array[types.float32, 3]
     right_q: types.array[types.float32, 4]
     right_t: types.array[types.float32, 3]
+
+
+@dataclass
+@annotate.final
+@annotate.autoid("sequential")
+class Pose6D(idl.IdlStruct, typename="Pose6D"):
+    orientation: types.array[types.float32, 4]
+    translation: types.array[types.float32, 3]

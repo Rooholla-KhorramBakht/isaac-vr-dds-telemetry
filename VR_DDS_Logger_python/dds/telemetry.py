@@ -132,3 +132,36 @@ class FlexivStatePublisher:
 
     def send(self, state):
         self.writer.write(state)
+
+
+class Publisher:
+    def __init__(self, msg_type, topic_name, interface_name = None):
+        # if interface_name is not None:
+        if True:
+            set_cyclonedds_config(interface_name)
+        self.topic_name = topic_name
+        self.participant = DomainParticipant()
+        self.topic = Topic(self.participant, self.topic_name, msg_type)
+        self.writer = DataWriter(self.participant, self.topic)
+
+    def send(self, msg):
+        self.writer.write(msg)
+
+
+class Subscriber:
+  def __init__(self, msg_type, topic_name='flexiv_state', interface_name = None):
+    self.topic_name = topic_name
+    if interface_name is not None:
+        set_cyclonedds_config(interface_name)
+    self.participant = DomainParticipant()
+    self.topic = Topic(self.participant, self.topic_name, msg_type)
+    self.reader = DataReader(self.participant, self.topic)
+
+  def getState(self):
+    state = None
+    for msg in self.reader.take_iter(timeout=duration(milliseconds=1.)):
+      state = msg
+    if state is not None:
+      return state
+    else:
+      return None
