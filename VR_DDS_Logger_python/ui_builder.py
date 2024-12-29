@@ -37,7 +37,7 @@ from .scene import PCDManager
 from .annotator import AnnotatorManager
 import os
 from omni.isaac.core.utils.numpy.rotations import euler_angles_to_quats, quats_to_rot_matrices, rot_matrices_to_quats
-from .dds.telemetry import Publisher
+from .dds.telemetry import VRPosePublihser
 from .dds.PoseMsg import VRPose
 
 class UIBuilder:
@@ -51,7 +51,7 @@ class UIBuilder:
         self.dds_enable = True
         self._timeline = omni.timeline.get_timeline_interface()
         try:
-            self.vr_pose_publihser = Publisher(VRPose, 'vr_poses')
+            self.vr_pose_publihser = VRPosePublihser('vr_poses_msg')
         except:
             print('Could not initialize the DDS. Make sure the network settings is right.')
             self.dds_enable = False
@@ -251,15 +251,17 @@ class UIBuilder:
             world = World.instance()
             world.scene.add(self._articulation)
             # Create a cuboid
-            self._cuboid = FixedCuboid(
-                "/Scenario/cuboid", position=np.array([10.5, 0.0, 0.7]), size=0.05, color=np.array([255, 0, 0])
-            )
+            # self._cuboid = FixedCuboid(
+            #     "/Scenario/cuboid", position=np.array([10.5, 0.0, 0.7]), size=0.05, color=np.array([255, 0, 0])
+            # )
+            # world.scene.add(self._cuboid)
+            self._t_tool = Articulation('/World/t_tool/t_tool_obj')
+
             self.annotation_manager = AnnotatorManager(world)
             self.annotation_manager.registerCamera('/World/front_cam', 'front_cam', [1.2, 0, 0.7], [-0.66233, -0.66233, 0.24763, 0.24763], (320, 240))
             self.annotation_manager.setFocalLength('front_cam',24)
             self.annotation_manager.setClippingRange('front_cam', 0.1, 100)
             self.annotation_manager.registerAnnotator('front_cam', 'rgb')
-            world.scene.add(self._cuboid)
 
     def _setup_scenario(self):
         """
@@ -279,7 +281,7 @@ class UIBuilder:
 
     def _reset_scenario(self):
         self._scenario.teardown_scenario()
-        self._scenario.setup_scenario(self._articulation, self._cuboid, self.get_vr_state)
+        self._scenario.setup_scenario(self._articulation, self._t_tool, self.get_vr_state)
         pass
 
     def _on_post_reset_btn(self):

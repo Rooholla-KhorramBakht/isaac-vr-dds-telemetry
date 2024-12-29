@@ -35,7 +35,11 @@ from omni.isaac.motion_generation.interface_config_loader import load_supported_
 from omni.isaac.nucleus import get_assets_root_path
 from .dds.PoseMsg import Pose6D
 from .dds.FlexivState import FlexivStateMsg
-from .dds.telemetry import Subscriber
+from .dds.telemetry import Subscriber, Publisher
+from omni.isaac.core.utils.numpy.rotations import euler_angles_to_quats, quats_to_rot_matrices, rot_matrices_to_quats
+from omni.usd import get_prim_at_path
+from omni.isaac.core.utils.prims import is_prim_path_valid
+
 
 """
 This scenario takes in a robot Articulation and makes it move through its joint DOFs.
@@ -71,6 +75,14 @@ class FlexivJointMimicScenario(ScenarioTemplate):
         self._y_limit = [-0.40, 0.4]
         self._z_limit = [0.04,  0.2]
 
+    def extractPrimPose(self, prim_path):
+        if is_prim_path_valid(prim_path):
+            hmd_prim = get_prim_at_path(prim_path)
+            t = np.array(hmd_prim.GetProperty('xformOp:translate').Get())
+            q =  hmd_prim.GetProperty('xformOp:orient').Get()
+            q = np.hstack([np.array(q.GetImaginary()), q.GetReal()])
+        return t, q
+
     def setup_scenario(self, articulation, object_prim, get_vr_pose_fn):
         self._articulation = articulation
         self._object = object_prim
@@ -105,6 +117,7 @@ class FlexivJointMimicScenario(ScenarioTemplate):
         self.ee_z_init = ee_trans[2]
         try:
             self.flexiv_state_subscriber = Subscriber(FlexivStateMsg, 'isaac_flexiv_joint_cmds')
+            self.obj_pose_publisher = Publisher(Pose6D, 't_tool_pose')
             self.joint_subsciber_enable = True
         except:
             print('Could not start the flexiv DDS joint subscriber')
@@ -125,20 +138,23 @@ class FlexivJointMimicScenario(ScenarioTemplate):
         if self.joint_subsciber_enable:
             joint_cmd = self.flexiv_state_subscriber.getState()
             if joint_cmd is not None:
-                print(joint_cmd.q)
-        obj_pose = self._object.get_world_pose()
-        obj_t = obj_pose[0]
+                self._articulation.set_joint_positions(np.array(joint_cmd.q))
+
+        t, q = self.extractPrimPose('/World/t_tool/t_tool_obj')
+        print(t)
+        obj_pose_msg = Pose6D(orientation=q.tolist(), translation=t.tolist())
+        self.obj_pose_publisher.send(obj_pose_msg)
         # if state['t'] is not None:
             # self._object.set_world_pose(np.array(state['t']))
         # ee_trans, ee_rot = self._rmpflow.get_end_effector_pose(
         #         self.articulation_motion_policy.get_active_joints_subset().get_joint_positions()
         #     )
-        if  vr_state is not None:
-            cmd = vr_state['right_t'].copy()
-            cmd[0] = np.clip(cmd[0], self._x_limit[0], self._x_limit[1])
-            cmd[1] = np.clip(cmd[1], self._y_limit[0], self._y_limit[1])
-            cmd[2] = np.clip(cmd[2], self._z_limit[0], self._z_limit[1])
-            print(cmd)
+        # if  vr_state is not None:
+        #     cmd = vr_state['right_t'].copy()
+        #     cmd[0] = np.clip(cmd[0], self._x_limit[0], self._x_limit[1])
+        #     cmd[1] = np.clip(cmd[1], self._y_limit[0], self._y_limit[1])
+        #     cmd[2] = np.clip(cmd[2], self._z_limit[0], self._z_limit[1])
+        #     print(cmd)
             # ee_trans_error = cmd - ee_trans
             # clipped_error = np.clip(ee_trans_error, -0.04, 0.04)
             # ee_des = ee_trans + clipped_error
